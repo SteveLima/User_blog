@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>Delete Post page</title>
+	<link rel="stylesheet" type="text/css" href="/stylesheets/bootstrap.min.css">
+	<link rel="stylesheet" type="text/css" href="/stylesheets/main.css">
+</head>
+<body>
+{% for Blog in Blogs %}
+	<div>
+		<p>Are you sure you want to delete {{Blog.title}}?</p>
+	</div>
+		{% endfor %}
+	<form method="post">
+	<div class="col-md-2">
+		<input class="box1" type="submit" name="" value="Delete">
+	</div>
+	</form>
+	<div class="col-md-2">
+		<a href="/mainpage"> <button class="box1"> Cancel </button> </a>
+	</div>
+</body>
+</html>
