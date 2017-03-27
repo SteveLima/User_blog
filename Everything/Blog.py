@@ -226,25 +226,28 @@ class like(Handler):
 		cookie_author = check_secure_val(self.request.cookies.get('user_id'))
 		s= blog.get_by_id(int(blog_id))
 		q = s.key().id()
-		if cookie_author != s.author:
-			liking = db.GqlQuery("SELECT * FROM likes WHERE blogid = :ss and userid = :k", ss=q,k=cookie_author)
-			liking = liking.fetch(1)
-			if liking == []:
-				p = likes(userid = cookie_author, blogid = q)
-				p.put()
-				updated_likes= s.likes +1
-				s.likes = updated_likes
-				s.put()
-				self.redirect('/mainpage')
+		if s :
+			if cookie_author != s.author:
+				liking = db.GqlQuery("SELECT * FROM likes WHERE blogid = :ss and userid = :k", ss=q,k=cookie_author)
+				liking = liking.fetch(1)
+				if liking == []:
+					p = likes(userid = cookie_author, blogid = q)
+					p.put()
+					updated_likes= s.likes +1
+					s.likes = updated_likes
+					s.put()
+					self.redirect('/mainpage')
+				else:
+					u = likes.all().filter('userid =',cookie_author).filter('blogid =',q).get()
+					updated_likes= s.likes - 1
+					s.likes = updated_likes
+					s.put()
+					u.delete()
+					self.redirect('/mainpage')
 			else:
-				u = likes.all().filter('userid =',cookie_author).filter('blogid =',q).get()
-				updated_likes= s.likes - 1
-				s.likes = updated_likes
-				s.put()
-				u.delete()
-				self.redirect('/mainpage')
+				self.write('You cant like your own post ')
 		else:
-			self.write('You cant like your own post ')
+			self.write('Error 404 Page not Found')
 
 class Logout(Handler):
 	def get(self):
@@ -254,24 +257,40 @@ class Logout(Handler):
 #class to display the new post page 
 class Newpost(Handler):
 	def get(self):
-		self.render('newpost.html') 
+		author = check_secure_val(self.request.cookies.get('user_id'))
+		if author:
+			self.render('newpost.html')
+		else:
+			self.redirect('/login')
 
 	def post (self):
-		title = self.request.get('title')
-		content = self.request.get('content')
-		author = check_secure_val(self.request.cookies.get('user_id'))
-		user_name = self.user.name
-		likes = 0 
-
-		if title and content:
-			Blog=blog(title =title, content = content, author = author, user_name = user_name, likes = likes)
-			key= Blog.put()
-			self.redirect("/blog/%d" %key.id())
+		if self.user:
+			title = self.request.get('title')
+			content = self.request.get('content')
+			author = check_secure_val(self.request.cookies.get('user_id'))
+			user_name = self.user.name
+			likes = 0 
+			u = User.all().filter('name =',user_name).get()
+			print(u)
+			if u:
+				if title and content:
+					Blog=blog(title =title, content = content, author = author, user_name = user_name, likes = likes)
+					key= Blog.put()
+					self.redirect("/blog/%d" %key.id())
+				else:
+					self.render("newpost.html")
+			else:
+				self.redirect('/login')
 		else:
-			self.render("newpost.html")
+			self.redirect('/login')
 
 class blog_single(Handler):
 	def get(self, blog_id):
+		key = db.Key.from_path('blog', int(blog_id))
+		post = db.get(key)
+		if not post:
+			return self.redirect('/mainpage')
+
         	Blog = blog.get_by_id(int(blog_id))
         	s = Blog.key().id()
         	Comments = db.GqlQuery("SELECT * FROM comment WHERE blogid = :ss", ss=s)
@@ -282,30 +301,49 @@ class blog_single(Handler):
 		# t = check_secure_val(self.request.cookies.get('user_id'))
 		content = self.request.get('content')
 		un = self.user.name
-		
-		if content:
-			Comment = comment(content= content, blogid = s.key().id(), userid = un)
-			Comment.put()
-			self.redirect("/blog/%d" %s.key().id())
+		if s:
+			if content:
+				Comment = comment(content= content, blogid = s.key().id(), userid = un)
+				Comment.put()
+				self.redirect("/blog/%d" %s.key().id())
+			else:
+				self.redirect("/mainpage")
 		else:
 			self.redirect("/mainpage")
+
 
 class edit_comment(Handler):
 	def get(self,comment_id):
 		s= comment.get_by_id(int(comment_id))
 		t = check_secure_val(self.request.cookies.get('user_id'))
-		if s.userid == self.user.name:
-			self.render("edit_comment.html", Comments = [s])
+		if s :
+			if t:
+				if s.userid == self.user.name:
+					self.render("edit_comment.html", Comments = [s])
+				else:
+					self.redirect('/mainpage')
+			else:
+				self.redirect('/mainpage')
 		else:
 			self.redirect('/mainpage')
 
+
+
 	def post(self,comment_id):
 		s= comment.get_by_id(int(comment_id))
-		u = s.blogid
-		content = self.request.get('content')
-		s.content = content
-		s.put()
-		self.redirect('/blog/%d'%u)
+		if s:
+			u = s.key().id()
+			t = self.user.name
+			y = s.blogid
+			if t == s.userid and u == int(comment_id):
+				content = self.request.get('content')
+				s.content = content
+				s.put()
+				self.redirect('/blog/%d'%y)
+			else:
+				self.redirect('/blog/%d'%y)
+		else:
+			self.redirect('/mainpage')
 
 class delete_comment(Handler):
 	def get(self,comment_id):
@@ -366,17 +404,6 @@ class edit_post(Handler):
 		else:
 			self.redirect("/mainpage")
 
-#class to display the main page 
-# class Mainpage(Handler):
-# 	def get(self):
-# 		username = self.request.get('username')
-# 		if valid_username(username):
-# 			Blogs = db.GqlQuery("SELECT * FROM blog ""ORDER BY created DESC ")
-# 			self.render("mainpage.html",Blogs = Blogs ,  username = username)
-# 		else:
-# 			self.redirect('/signup')
-
-	
 
 
 app = webapp2.WSGIApplication([ ('/newpost',Newpost),
